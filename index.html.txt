@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>座標確認マップ</title>
+
+<link rel="stylesheet"
+ href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+
+<style>
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: system-ui, sans-serif;
+    background: #111;
+    color: #fff;
+}
+
+#map {
+    width: 100%;
+    height: 60vh;
+}
+
+.panel {
+    padding: 18px;
+    background: #181818;
+}
+
+h1 {
+    margin: 0 0 12px;
+    font-size: 22px;
+}
+
+h2 {
+    font-size: 17px;
+    margin-top: 20px;
+}
+
+.coordinate,
+.script {
+    background: #252525;
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 12px;
+}
+
+.value {
+    font-family: monospace;
+    font-size: 19px;
+    line-height: 1.7;
+    word-break: break-all;
+}
+
+.script-text {
+    font-size: 17px;
+    line-height: 1.7;
+}
+
+button {
+    width: 100%;
+    padding: 14px;
+    margin-top: 8px;
+    border: 0;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: bold;
+    background: #ddd;
+    color: #111;
+}
+
+button:active {
+    transform: scale(0.98);
+}
+
+.hint {
+    color: #aaa;
+    font-size: 13px;
+    margin-top: 10px;
+}
+</style>
+</head>
+
+<body>
+
+<div id="map"></div>
+
+<div class="panel">
+
+<h1>📍 座標確認マップ</h1>
+
+<div class="coordinate">
+
+    <div>緯度</div>
+    <div class="value" id="lat">未選択</div>
+
+    <div>経度</div>
+    <div class="value" id="lng">未選択</div>
+
+    <hr>
+
+    <div>北緯・東経表記</div>
+    <div class="value" id="dms">未選択</div>
+
+</div>
+
+
+<h2>🗣 座標読み上げ台本</h2>
+
+<div class="script">
+    <div class="script-text" id="script">
+        「座標、北緯〇〇度〇〇分〇〇秒、
+        東経〇〇度〇〇分〇〇秒、以上。」
+    </div>
+</div>
+
+<button onclick="copyCoordinate()">
+    座標をコピー
+</button>
+
+<button onclick="copyScript()">
+    台本をコピー
+</button>
+
+<button onclick="getCurrentLocation()">
+    現在地を取得
+</button>
+
+<div class="hint">
+    地図をタップすると、その地点の座標と読み上げ台本が更新されます。
+</div>
+
+</div>
+
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+
+/* =========================
+   地図
+========================= */
+
+const map = L.map("map").setView(
+    [35.681236, 139.767125],
+    13
+);
+
+L.tileLayer(
+    "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    {
+        maxZoom: 19,
+        attribution:
+        "&copy; OpenStreetMap contributors"
+    }
+).addTo(map);
+
+
+/* =========================
+   変数
+========================= */
+
+let marker = null;
+
+let selectedLat = null;
+let selectedLng = null;
+
+let scriptText = "";
+
+
+/* =========================
+   地図クリック
+========================= */
+
+map.on("click", function(e) {
+
+    selectedLat = e.latlng.lat;
+    selectedLng = e.latlng.lng;
+
+    setMarker();
+
+    updateDisplay();
+
+});
+
+
+/* =========================
+   マーカー
+========================= */
+
+function setMarker() {
+
+    if (marker) {
+        map.removeLayer(marker);
+    }
+
+    marker = L.marker([
+        selectedLat,
+        selectedLng
+    ]).addTo(map);
+}
+
+
+/* =========================
+   表示更新
+========================= */
+
+function updateDisplay() {
+
+    document.getElementById("lat").textContent =
+        selectedLat.toFixed(6);
+
+    document.getElementById("lng").textContent =
+        selectedLng.toFixed(6);
+
+
+    const latDMS =
+        convertDMS(selectedLat, true);
+
+    const lngDMS =
+        convertDMS(selectedLng, false);
+
+
+    document.getElementById("dms").textContent =
+        latDMS + " / " + lngDMS;
+
+
+    /*
+       台本生成
+    */
+
+    scriptText =
+        "「座標、" +
+        latDMS +
+        "、" +
+        lngDMS +
+        "、以上。」";
+
+
+    document.getElementById("script").textContent =
+        scriptText;
+}
+
+
+/* =========================
+   DMS変換
+========================= */
+
+function convertDMS(value, latitude) {
+
+    const direction =
+        latitude
+        ? (value >= 0 ? "北緯" : "南緯")
+        : (value >= 0 ? "東経" : "西経");
+
+
+    value = Math.abs(value);
+
+
+    const degrees =
+        Math.floor(value);
+
+
+    const minutesFloat =
+        (value - degrees) * 60;
+
+
+    const minutes =
+        Math.floor(minutesFloat);
+
+
+    const seconds =
+        (minutesFloat - minutes) * 60;
+
+
+    return (
+        direction +
+        degrees +
+        "度" +
+        minutes +
+        "分" +
+        seconds.toFixed(1) +
+        "秒"
+    );
+}
+
+
+/* =========================
+   現在地取得
+========================= */
+
+function getCurrentLocation() {
+
+    if (!navigator.geolocation) {
+
+        alert(
+            "このブラウザは位置情報に対応していません。"
+        );
+
+        return;
+    }
+
+
+    navigator.geolocation.getCurrentPosition(
+
+        function(position) {
+
+            selectedLat =
+                position.coords.latitude;
+
+            selectedLng =
+                position.coords.longitude;
+
+
+            map.setView(
+                [selectedLat, selectedLng],
+                17
+            );
+
+
+            setMarker();
+
+            updateDisplay();
+
+        },
+
+
+        function(error) {
+
+            alert(
+                "位置情報を取得できませんでした。\n" +
+                "ブラウザの位置情報許可を確認してください。"
+            );
+
+        }
+    );
+}
+
+
+/* =========================
+   座標コピー
+========================= */
+
+function copyCoordinate() {
+
+    if (
+        selectedLat === null ||
+        selectedLng === null
+    ) {
+
+        alert(
+            "先に地図上の地点を選択してください。"
+        );
+
+        return;
+    }
+
+
+    const text =
+        convertDMS(selectedLat, true) +
+        " / " +
+        convertDMS(selectedLng, false);
+
+
+    navigator.clipboard.writeText(text)
+        .then(function() {
+
+            alert("座標をコピーしました。");
+
+        })
+        .catch(function() {
+
+            alert("コピーできませんでした。");
+
+        });
+}
+
+
+/* =========================
+   台本コピー
+========================= */
+
+function copyScript() {
+
+    if (
+        selectedLat === null ||
+        selectedLng === null
+    ) {
+
+        alert(
+            "先に地図上の地点を選択してください。"
+        );
+
+        return;
+    }
+
+
+    navigator.clipboard.writeText(scriptText)
+        .then(function() {
+
+            alert(
+                "読み上げ台本をコピーしました。"
+            );
+
+        })
+        .catch(function() {
+
+            alert(
+                "コピーできませんでした。"
+            );
+
+        });
+}
+
+</script>
+
+</body>
+</html>
